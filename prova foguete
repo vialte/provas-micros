@@ -1,0 +1,103 @@
+#include "stm32g0xx.h"
+
+int main() {
+    // ============= CONFIGURAÇÃO INICIAL =============
+    // Habilita clock para as portas GPIOA, GPIOB, GPIOC, GPIOD, GPIOF
+    RCC->IOPENR = 0x3f;
+    // Habilita clock para o TIMER7 (periférico de temporização)
+    RCC->APBENR1 = 0x20;
+    
+    // Configura PA0 como saída digital (pino do LED de lançamento)
+    // 0x01 = 00000001 em binário -> MODER0 = 01 (saída)
+    GPIOA->MODER = 0x01;
+    
+    // Configura PB0-PB7 como saídas digitais (8 LEDs de contagem regressiva)
+    // 0x5555 = 0101010101010101 em binário -> cada par de bits = 01 (saída)
+    GPIOB->MODER = 0x5555;
+    
+    // Configura PC0 como entrada (botão lançar) e PC1 como entrada (botão abortar)
+    // 0x00 = todos os pinos como entrada (reset value)
+    GPIOC->MODER = 0x00;
+    
+    // ============= CONFIGURAÇÃO DO TIMER =============
+    // Timer7 para gerar interrupções a cada 100ms
+    TIM7->PSC = 15999;   // Prescaler: 15999 + 1 = 16000
+    TIM7->ARR = 999;     // Auto-reload value: 999 + 1 = 1000
+    // Frequência do timer: 16MHz / 16000 / 1000 = 1Hz (1 interrupção por segundo)
+    TIM7->CR1 = 0x01;    // Habilita o timer (bit 0 = 1)
+    
+    // ============= VARIÁVEIS DE CONTROLE =============
+    int cont = 0;           // Contador de intervalos de 100ms
+    int estado = 0;         // Estado do sistema:
+                            // 0: piscando (aguardando)
+                            // 1: contagem regressiva
+                            // 2: lançado
+                            // 3: abortado
+    int leds_ativos = 0;    // Estado atual dos LEDs (bitmask)
+    
+    // ============= LOOP PRINCIPAL =============
+    while(1) {
+        // Verifica se o timer atingiu o valor programado (100ms)
+        if(TIM7->SR & 0x01) {
+            TIM7->SR ^= 0x01; // Limpa a flag de interrupção
+            cont++;           // Incrementa contador de tempo
+        }
+        
+        // --- ESTADO 0: LEDs PISCANDO (AGUARDANDO LANÇAMENTO) ---
+        if(estado == 0) {
+            // Após 1 segundo (10 × 100ms = 1000ms)
+            if(cont == 10) {
+                GPIOB->ODR = 0xFF; // Liga todos os 8 LEDs (0xFF = 11111111)
+            }
+            // Após 2 segundos (20 × 100ms = 2000ms)
+            if(cont == 20) {
+                GPIOB->ODR = 0x00; // Apaga todos os LEDs
+                cont = 0;          // Reinicia contador
+            }
+            
+            // Verifica se o botão de LANÇAMENTO foi pressionado (PC0)
+            if(GPIOC->IDR & 0x01) {
+                estado = 1;         // Muda para estado de contagem
+                cont = 0;           // Reinicia contador de tempo
+                leds_ativos = 0xFF; // Todos os LEDs ativos
+                GPIOB->ODR = leds_ativos; // Liga todos os LEDs
+            }
+        }
+        
+        // --- ESTADO 1: CONTAGEM REGRESSIVA ---
+        if(estado == 1) {
+            // A cada 1 segundo (10 × 100ms)
+            if(cont == 10) {
+                cont = 0;           // Reinicia contador
+                // Desloca bits para direita (apaga um LED da direita)
+                // Ex: 11111111 >> 1 = 01111111 (apaga PB0)
+                leds_ativos = leds_ativos >> 1;
+                GPIOB->ODR = leds_ativos; // Atualiza LEDs
+                
+                // Verifica se todos os LEDs foram apagados
+                if(leds_ativos == 0) {
+                    estado = 2;             // Muda para estado de lançado
+                    GPIOA->ODR = 0x01;      // Liga LED de lançamento (PA0)
+                }
+            }
+            
+            // Verifica se o botão de ABORTAR foi pressionado (PC1)
+            if(GPIOC->IDR & 0x02) {
+                estado = 3; // Muda para estado abortado
+                // Os LEDs permanecem no estado atual (congelados)
+            }
+        }
+        
+        // --- ESTADO 3: ABORTADO (CONGELA ESTADO ATUAL) ---
+        if(estado == 3) {
+            // Não faz nada - mantém os LEDs no estado atual
+            // O sistema permanece neste estado até ser resetado
+        }
+        
+        // --- ESTADO 2: LANÇADO (MISSÃO CUMPRIDA) ---
+        if(estado == 2) {
+            // Não faz nada - mantém LED de lançamento aceso
+            // O sistema permanece neste estado até ser resetado
+        }
+    }
+}
