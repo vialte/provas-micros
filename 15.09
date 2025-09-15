@@ -1,0 +1,147 @@
+#include "stm32g0xx.h"
+
+int deco[] = {0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7C, 0x07, 0x7F, 0x6F}; //tabela para display 7 segmentos (0-9)
+
+int primos[] = {2, 3, 5, 7};       //vetor primos em ordem crescente
+int compostos[] = {9, 8, 6, 4};    //vetor compostos em ordem decrescente
+
+int cont = 0; //indice para navegar nos vetores
+int num_atual = 2; //numero atual no display (comeca no primo 2)
+
+int main() {
+    //configuracoes de clock iguais aos seus exercicios
+    RCC->IOPENR = 0x3f;
+    RCC->APBENR1 = 0x20;
+
+    //configura PC0-PC6 como saida para o display
+    GPIOC->MODER = 0x5555;
+    
+    //configura PA0 como saida para o LED
+    GPIOA->MODER |= 0x1;
+    
+    //configura PB0 e PB1 como entrada para os botoes
+    GPIOB->MODER &= ~0xF;
+    
+    //configura timer para ~100ms (debounce)
+    TIM7->PSC = 15999;
+    TIM7->ARR = 99;
+    TIM7->CR1 |= 0x01;
+
+    int press_b1 = 0, press_b2 = 0; //flags para controle dos botoes
+
+    while(1) {
+        //atualiza o display com o numero atual
+        GPIOC->ODR = (GPIOC->ODR & ~0x7F) | deco[num_atual];
+        
+        //liga LED se for primo, desliga se for composto
+        if(num_atual == 2 || num_atual == 3 || num_atual == 5 || num_atual == 7) {
+            GPIOA->ODR |= 0x1;  //acende LED
+        } else {
+            GPIOA->ODR &= ~0x1; //apaga LED
+        }
+        
+        //botao B1 (PB0) - navega pelos primos
+        if(GPIOB->IDR & 0x1) { //verifica se botao esta pressionado
+            if(!press_b1 && (TIM7->SR & 0x1)) { //verifica se foi pressionado agora
+                TIM7->SR &= ~0x1; //limpa flag do timer
+                press_b1 = 1; //marca que botao foi pressionado
+                
+                cont++; //vai para o proximo indice
+                if(cont >= 4) cont = 0; //volta para o inicio se chegar no fim
+                num_atual = primos[cont]; //pega o numero do vetor de primos
+            }
+        } else {
+            press_b1 = 0; //botao nao esta pressionado
+        }
+        
+        //botao B2 (PB1) - navega pelos compostos
+        if(GPIOB->IDR & 0x2) { //verifica se botao esta pressionado
+            if(!press_b2 && (TIM7->SR & 0x1)) { //verifica se foi pressionado agora
+                TIM7->SR &= ~0x1; //limpa flag do timer
+                press_b2 = 1; //marca que botao foi pressionado
+                
+                cont++; //vai para o proximo indice
+                if(cont >= 4) cont = 0; //volta para o inicio se chegar no fim
+                num_atual = compostos[cont]; //pega o numero do vetor de compostos
+            }
+        } else {
+            press_b2 = 0; //botao nao esta pressionado
+        }
+    }
+}  
+
+#include "stm32g0xx.h"
+
+int deco[] = {0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7C, 0x07, 0x7F, 0x6F}; // display 7-seg (0-9)
+
+// vetores com numeros pares e impares
+int pares[] = {0, 2, 4, 6, 8};    // numeros pares em ordem crescente
+int impares[] = {9, 7, 5, 3, 1};   // numeros impares em ordem decrescente
+
+int cont = 0; // indice atual no vetor
+int tipo = 0; // 0 = par, 1 = impar
+
+int main() {
+    // habilita clocks - igual seus exercicios
+    RCC->IOPENR = 0x3f;
+    RCC->APBENR1 = 0x20;
+
+    // configura display (PC0-PC6) como saida - igual seus exercicios
+    GPIOC->MODER = 0x5555;
+    
+    // configura LED (PA0) como saida - igual seus exercicios
+    GPIOA->MODER |= 0x1;
+    
+    // configura botoes (PB0 e PB1) como entrada - igual seus exercicios
+    GPIOB->MODER &= ~0xF;
+    
+    // Timer7 para debounce ~100ms - igual seus exercicios
+    TIM7->PSC = 15999;
+    TIM7->ARR = 99;
+    TIM7->CR1 |= 0x01;
+
+    int press_b1 = 0, press_b2 = 0;
+    int numero_atual = pares[cont]; // comeca no primeiro par (0)
+
+    while(1) {
+        // atualiza display - igual seus exercicios
+        GPIOC->ODR = (GPIOC->ODR & ~0x7F) | deco[numero_atual];
+        
+        // verifica se numero é 2 e liga LED - igual seus exercicios
+        if(numero_atual == 2) {
+            GPIOA->ODR |= 0x1;  // liga o LED
+        } else {
+            GPIOA->ODR &= ~0x1; // desliga o LED
+        }
+        
+        // ---- botao B1: proximo numero par (0-9) ----
+        if(GPIOB->IDR & 0x1) { // botao B1 (PB0) pressionado
+            if(!press_b1 && (TIM7->SR & 0x1)) { 
+                TIM7->SR &= ~0x1; // limpa flag - igual seus exercicios
+                press_b1 = 1;
+                
+                tipo = 0; // modo par
+                cont++;   // proximo indice
+                if(cont >= 5) cont = 0; // volta ao inicio
+                numero_atual = pares[cont];
+            }
+        } else {
+            press_b1 = 0;
+        }
+        
+        // ---- botao B2: proximo numero impar (9-0) ----
+        if(GPIOB->IDR & 0x2) { // botao B2 (PB1) pressionado
+            if(!press_b2 && (TIM7->SR & 0x1)) { 
+                TIM7->SR &= ~0x1; // limpa flag - igual seus exercicios
+                press_b2 = 1;
+                
+                tipo = 1; // modo impar
+                cont++;   // proximo indice
+                if(cont >= 5) cont = 0; // volta ao inicio
+                numero_atual = impares[cont];
+            }
+        } else {
+            press_b2 = 0;
+        }
+    }
+}
