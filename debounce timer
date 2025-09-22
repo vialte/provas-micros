@@ -1,0 +1,43 @@
+#include "stm32g0xx.h"
+
+int main(){
+
+	RCC->IOPENR=0X3F;
+	GPIOB->MODER= 0X280000001;//PA0 led
+	GPIOC->MODER=0X00;
+	//pulldown em pc0
+	GPIOC->PUPDR=0X02; //10
+	
+	//variavel p ver se o botao for apertado
+	pressionado=0;
+	int botao=0;
+	int cont_bt=0;
+	
+	TIM7->ARR=7999;
+	TIM7->PSC=19;
+	TIM7->CR1=0x01;
+	//t=5ms
+	
+while(1){
+	botao=GPIOC->IDR &0x01;
+	if(botao && presionado==0){//se o botao for apertado
+		GPIOA->ODR ^0x01;//inverte o estado do led
+		pressionado=1;//sinaliza q o botao foi pressionado
+		
+		TIM7->CNT=0;//zera a contagem
+		TIM7->SR &=~0x01;//limpa flag
+		
+		cont_bt=0;
+	}
+	
+	//mas ainda precisa verificar se o botao ta solto
+	
+	if(pressionado==1){//se ele ta pressionado
+		if(TIM7->SR & 0x01){//e a flag for estourada
+			if(botao==0){//se o botao ta solto
+			pressionado=0;
+		}
+	}
+	}
+  }
+}
